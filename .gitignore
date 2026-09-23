@@ -1,0 +1,27 @@
+# Volcados de la base de datos: contienen datos reales del equipo (nombres,
+# claves de ticket, imputaciones). Nunca deben salir del ordenador.
+backups/
+*.sql.gz
+*.dump
+
+# Exportaciones de Jira, por el mismo motivo.
+*.csv
+!docs/examples/*.csv
+
+# Dependencias y artefactos de build
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Configuración local
+.env
+.env.local
+!.env.example
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
