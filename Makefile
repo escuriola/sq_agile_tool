@@ -48,6 +48,16 @@ restore:
 	@test -n "$(FILE)" || (echo "Missing FILE=backups/..."; exit 1)
 	$(COMPOSE) exec -T db psql -U $${DB_USER:-agile} -d $${DB_NAME:-agile} < $(FILE)
 
+## update: back up, pull the latest code from GitHub and rebuild.
+update:
+	@test -d .git || { echo "Not a git clone. See the README for how to install."; exit 1; }
+	@$(MAKE) --no-print-directory backup
+	git pull --ff-only
+	$(COMPOSE) up -d --build
+	@echo ""
+	@echo "  Updated to $$(git log -1 --format='%h %s')"
+	@echo "  Web -> http://localhost:$${WEB_PORT:-5180}"
+
 ## demo: start a separate instance with sample data, on ports 5190/5191.
 demo:
 	$(DEMO_ENV) $(COMPOSE) up -d --build
@@ -73,4 +83,4 @@ reset:
 help:
 	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/^## /  make /'
 
-.PHONY: up down restart logs ps psql backup restore demo demo-down reset help
+.PHONY: up down restart logs ps psql backup restore update demo demo-down reset help

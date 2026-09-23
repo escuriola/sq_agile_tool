@@ -24,6 +24,27 @@ Running a sprint as Scrum Master means answering questions a ticket tracker does
 Everything runs on your machine, against your own PostgreSQL. No account, no SaaS, no data leaving
 the laptop.
 
+## Installing it
+
+```bash
+git clone https://github.com/escuriola/sq_agile_tool.git
+cd sq_agile_tool
+make up
+```
+
+**Requirements:** Docker with Compose v2, and `make`. Nothing else — Node is only needed if you
+want to run the services outside Docker.
+
+Cloning is the way to install it because that is also how you update it:
+
+```bash
+make update
+```
+
+That takes a backup first, pulls the latest code and rebuilds. The backup matters: the database
+schema is applied automatically at startup, so an update can migrate your data. Your dumps land in
+`backups/`, which is never committed.
+
 ## Try it in one command
 
 ```bash
@@ -55,6 +76,7 @@ interface.
 | Command | What it does |
 | --- | --- |
 | `make up` | Builds and starts everything. Keeps data. |
+| `make update` | Backs up, pulls the latest code and rebuilds. |
 | `make down` | Stops the containers. Does **not** delete data. |
 | `make demo` | Separate instance with sample data on port 5190. |
 | `make demo-down` | Stops the demo and deletes **only** its data. |
@@ -66,9 +88,6 @@ interface.
 
 Ports and credentials are configurable: copy `.env.example` to `.env` and edit it. `backups/` is
 git-ignored, because a dump contains real names and ticket keys.
-
-**Requirements:** Docker with Compose v2, and `make`. Nothing else — Node is only needed if you
-want to run the services outside Docker.
 
 ## What you get
 
@@ -499,8 +518,23 @@ The **Metrics** tab of each sprint:
 - **Largest deviations**: the specific tasks that strayed furthest from the estimate. These are the
   ones you take to the retro.
 
-The **Dashboard** shows the trend across sprints: committed vs completed, actual hours, average
-velocity and historical hours per point.
+### The Dashboard
+
+The **Dashboard** shows the trend across sprints: what was committed against what was delivered,
+the hours actually logged, and the averages you use to size the next sprint.
+
+It measures in whatever unit your team estimates in, decided automatically:
+
+- **If you use story points**, it reports average velocity in points per closed sprint and the
+  historical hours per point, with points on the left axis and hours on the right.
+- **If you estimate only in hours** — which is the common case, and what the demo shows — it falls
+  back to hours: average velocity becomes the **estimated hours delivered per closed sprint**, and
+  hours per point becomes **actual per estimated hour**, a multiplier of how far your estimates
+  land from reality. A ×1.06 means the team spends 6 % more than it estimates. Everything is then
+  on one scale, so the axis on the right disappears.
+
+Either way the averages only count sprints whose status is **closed**. A sprint left as `active`
+after it has finished will not feed them, which is the usual reason the two averages show «—».
 
 ## Development without Docker
 
