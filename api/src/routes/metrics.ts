@@ -916,6 +916,7 @@ export default async function metricsRoutes(app: FastifyInstance) {
               coalesce(sum(t.estimate_points), 0)                           as total_points,
               coalesce(sum(t.estimate_points) filter (where t.status = 'done'), 0) as completed_points,
               coalesce(sum(t.estimate_hours), 0)                            as estimate_hours,
+              coalesce(sum(t.estimate_hours) filter (where t.status = 'done'), 0) as completed_estimate_hours,
               coalesce((select sum(d.hours) from dedications d
                         join tasks tt on tt.uid = d.task_uid
                         where tt.sprint_id = s.id), 0)                      as logged_hours

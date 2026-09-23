@@ -108,18 +108,9 @@ values
   ('MOB-112',  'DEMO-3', 'MOBILE', 'Push permission prompt timing',    'story',   'discovery','todo',        8, null,    false, false, null)
 on conflict do nothing;
 
--- Puntos de historia además de las horas. Este equipo de mentira usa los dos;
--- así el Dashboard tiene algo que enseñar en velocidad media. Si tu equipo sólo
--- estima en horas, deja el campo vacío y la herramienta funciona igual.
-update tasks
-   set estimate_points = case
-         when estimate_hours is null then null
-         when estimate_hours <=  6 then 1
-         when estimate_hours <= 12 then 2
-         when estimate_hours <= 20 then 3
-         else 5
-       end
- where sprint_id like 'DEMO-%' and estimate_points is null;
+-- Este equipo de mentira estima sólo en horas, como la mayoría: así la demo
+-- enseña el comportamiento por defecto del panel, que cae a horas cuando no hay
+-- puntos. Si tu equipo usa puntos, rellena estimate_points y el panel los usa.
 
 -- Fecha de cierre repartida por el sprint, para que el burndown baje poco a poco
 -- en vez de desplomarse el último día.

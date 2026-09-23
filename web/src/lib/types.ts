@@ -281,6 +281,8 @@ export type VelocityRow = {
   total_points: number;
   completed_points: number;
   estimate_hours: number;
+  /** Horas estimadas de lo que se cerró: la velocidad de quien no usa puntos. */
+  completed_estimate_hours: number;
   logged_hours: number;
 };
 
