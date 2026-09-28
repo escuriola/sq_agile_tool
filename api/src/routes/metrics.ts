@@ -4,6 +4,7 @@ import { q, one } from '../db.js';
 type Sprint = {
   id: string; name: string; start_date: string | null; end_date: string | null;
   goal: string | null; status: string; discovery_ratio: number; commit_factor: number;
+  review_ratio: number;
 };
 
 type TaskRow = {
@@ -15,11 +16,14 @@ type TaskRow = {
   jira_status: string | null; jira_created_at: string | null; jira_resolved_at: string | null;
   sprint_count: number | null; blocked_by: string[] | null; total_time_spent: number | null;
   assignee_id: string | null; added_after_start: boolean; completed_at: string | null;
+  overhead: boolean;
   logged_hours: number;
 };
 
 type DedRow = {
   user_id: string; hours: number; date: string; project_id: string; task_key: string; track: string;
+  /** Owner de la tarea y marca de overhead: hacen falta para clasificar la hora. */
+  assignee_id: string | null; overhead: boolean; note: string | null;
 };
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -66,14 +70,15 @@ export async function computeMetrics(id: string) {
               t.priority, t.component, t.epic, t.jira_status, t.jira_created_at,
               t.jira_resolved_at, t.sprint_count, t.blocked_by, t.total_time_spent,
               t.estimate_points, t.estimate_hours, t.assignee_id,
-              t.added_after_start, t.completed_at,
+              t.added_after_start, t.completed_at, t.overhead,
               coalesce((select sum(d.hours) from dedications d where d.task_uid = t.uid), 0) as logged_hours
        from tasks t where t.sprint_id = $1`,
       [id]
     );
 
     const deds = await q<DedRow>(
-      `select d.user_id, d.hours, d.date, t.project_id, t.key as task_key, t.track
+      `select d.user_id, d.hours, d.date, t.project_id, t.key as task_key, t.track,
+              t.assignee_id, t.overhead, d.note
        from dedications d join tasks t on t.uid = d.task_uid
        where t.sprint_id = $1
        order by d.date`,
@@ -433,9 +438,120 @@ export async function computeMetrics(id: string) {
 
     // El delivery es el commitment del sprint; el discovery se reserva un
     // porcentaje de la capacidad y ocupa lo que el delivery deje libre.
+    /* ------------------------------------- desarrollo, revisión y overhead */
+
+    /**
+     * En qué se fue cada hora. Dos reglas, en este orden:
+     *
+     *  1. Lo que diga la nota del worklog, cuando dice algo.
+     *  2. Si no dice nada: la hizo el owner -> desarrollo; la hizo otro -> revisión.
+     *
+     * La segunda regla no es un supuesto cómodo, está medida contra las horas que
+     * sí llevan etiqueta: el 98,6 % de lo etiquetado como desarrollo lo imputó el
+     * owner, y el 82,6 % de lo etiquetado como revisión lo imputó otra persona.
+     * Las tareas marcadas como overhead (deployments) van aparte pase lo que pase.
+     */
+    const RE_REVIEW = /(^|[^a-z])(review|revisi[oó]n|peer|merge request)/i;
+    const RE_DEPLOY = /(deploy|release|acceptance)/i;
+    const RE_DEV = /(development|desarrollo|implement|refactor|coding)/i;
+
+    type Clase = 'development' | 'review' | 'overhead' | 'unattributed';
+    const clasificar = (d: DedRow): { clase: Clase; explicita: boolean } => {
+      if (d.overhead) return { clase: 'overhead', explicita: true };
+      const n = d.note ?? '';
+      if (RE_REVIEW.test(n)) return { clase: 'review', explicita: true };
+      if (RE_DEPLOY.test(n)) return { clase: 'overhead', explicita: true };
+      if (RE_DEV.test(n)) return { clase: 'development', explicita: true };
+      if (!d.assignee_id) return { clase: 'unattributed', explicita: false };
+      return { clase: d.user_id === d.assignee_id ? 'development' : 'review', explicita: false };
+    };
+
+    const efecto = { development: 0, review: 0, overhead: 0, unattributed: 0 };
+    let horasExplicitas = 0;
+    const porPersonaClase = new Map<string, { development: number; review: number; overhead: number }>();
+    for (const d of deds) {
+      const { clase, explicita } = clasificar(d);
+      efecto[clase] += d.hours;
+      if (explicita) horasExplicitas += d.hours;
+      if (clase !== 'unattributed') {
+        const row =
+          porPersonaClase.get(d.user_id) ?? { development: 0, review: 0, overhead: 0 };
+        row[clase] += d.hours;
+        porPersonaClase.set(d.user_id, row);
+      }
+    }
+
+    const devLogged = round(efecto.development);
+    const reviewLogged = round(efecto.review);
+    const overheadLogged = round(efecto.overhead);
+
+    const timeSplit = {
+      development: devLogged,
+      review: reviewLogged,
+      overhead: overheadLogged,
+      unattributed: round(efecto.unattributed),
+      /** Revisión como porcentaje del desarrollo: la cifra con la que se calibra la reserva. */
+      reviewOverDev: devLogged ? round((reviewLogged / devLogged) * 100, 1) : null,
+      /** Qué parte del reparto descansa en una nota y no en la deducción por owner. */
+      explicitPct: loggedHours ? round((horasExplicitas / loggedHours) * 100, 1) : null,
+      byUser: [...porPersonaClase.entries()]
+        .map(([user_id, r]) => ({
+          user_id,
+          name: userName.get(user_id) ?? user_id,
+          development: round(r.development),
+          review: round(r.review),
+          overhead: round(r.overhead),
+          reviewPct: r.development + r.review
+            ? round((r.review / (r.development + r.review)) * 100, 1)
+            : null,
+        }))
+        .sort((a, b) => b.review - a.review),
+    };
+
     const discoveryRatio = Number(sprint.discovery_ratio ?? 0.20);
     const deliveryCapacity = teamCapacity * (1 - discoveryRatio);
     const discoveryCapacity = teamCapacity * discoveryRatio;
+
+    /**
+     * Lo que de verdad puedes comprometer en desarrollo. La capacidad de delivery
+     * no está entera disponible: las tareas de overhead (deployments) se llevan
+     * sus horas sí o sí, y de lo que queda una parte se va en revisar lo que el
+     * equipo desarrolla. Comprometer contra la capacidad de delivery a secas es
+     * lo que hace que el sprint salga al 100 % y aun así no quepa.
+     */
+    const reviewRatio = Number(sprint.review_ratio ?? 0.30);
+    const overheadTasks = tasks.filter((t) => t.overhead);
+    // Lo reservado es lo estimado; si no se estimó, al menos lo ya imputado.
+    const overheadReserve = Math.max(sum(overheadTasks.map(est)), overheadLogged);
+    const availableForDev = Math.max(deliveryCapacity - overheadReserve, 0);
+    // dev + revisión = disponible, con revisión = ratio * dev
+    const developmentCapacity = availableForDev / (1 + reviewRatio);
+    const reviewReserve = availableForDev - developmentCapacity;
+
+    // El compromiso de desarrollo excluye overhead: esas horas ya están apartadas.
+    const committedEstimateHours = sum(tasks.filter((t) => !t.overhead).map(est));
+    const developmentCommitted = committedEstimateHours * (1 - reviewRatio);
+    const reviewCommitted = committedEstimateHours * reviewRatio;
+
+    const capacityChain = {
+      reviewRatio,
+      teamCapacity: capacityIsSet ? round(teamCapacity) : null,
+      deliveryCapacity: capacityIsSet ? round(deliveryCapacity) : null,
+      overheadReserve: round(overheadReserve),
+      overheadTasks: overheadTasks.length,
+      reviewReserve: capacityIsSet ? round(reviewReserve) : null,
+      developmentCapacity: capacityIsSet ? round(developmentCapacity) : null,
+      /** Lo metido en el sprint, ya descontado el overhead. */
+      committedEstimate: round(committedEstimateHours),
+      developmentCommitted: round(developmentCommitted),
+      reviewCommitted: round(reviewCommitted),
+      developmentLoad: capacityIsSet && developmentCapacity
+        ? round((developmentCommitted / developmentCapacity) * 100, 1)
+        : null,
+      overCommitted: capacityIsSet
+        ? round(Math.max(developmentCommitted - developmentCapacity, 0))
+        : null,
+    };
 
     const trackRow = (name: 'delivery' | 'discovery', capacityForTrack: number) => {
       const ts = tasks.filter((t) => t.track === name);
@@ -636,9 +752,12 @@ export async function computeMetrics(id: string) {
         // El burndown se mide en HORAS ESTIMADAS de las tareas cerradas: el equipo
         // no usa puntos de historia. Los puntos se mantienen por si algún día se
         // usan, pero no son la serie principal.
+        // El overhead queda fuera: la tarea de deployments no se cierra hasta el
+        // último día por diseño, así que dentro del burndown sólo aporta un
+        // escalón final que no dice nada del avance del equipo.
         const cerradas = tasks.filter((t) => {
           const c = cierre(t);
-          return t.status === 'done' && c && c <= date;
+          return !t.overhead && t.status === 'done' && c && c <= date;
         });
         const doneHours = sum(cerradas.map(est));
         const donePts = sum(cerradas.map(pts));
@@ -657,7 +776,9 @@ export async function computeMetrics(id: string) {
           weekend: isWeekend(date),
           // serie principal, en horas
           idealHours,
-          remainingEstimate: past ? round(estimateHours - doneHours) : null,
+          // committedEstimateHours excluye el overhead, igual que doneHours: si no,
+          // la curva se quedaría plana en las horas de la tarea de deployments.
+          remainingEstimate: past ? round(committedEstimateHours - doneHours) : null,
           completedEstimate: past ? round(doneHours) : null,
           tasksDone: past ? cerradas.length : null,
           // serie en puntos, sólo si el equipo los usa
@@ -668,7 +789,7 @@ export async function computeMetrics(id: string) {
           // hubiera imputaciones en días que aún no han pasado
           loggedHours: past ? round(dedByDate.get(date) ?? 0) : null,
           cumulativeHours: past ? round(cumHours) : null,
-          remainingHours: past ? round(Math.max(estimateHours - cumHours, 0)) : null,
+          remainingHours: past ? round(Math.max(committedEstimateHours - cumHours, 0)) : null,
         };
       });
 
@@ -739,6 +860,8 @@ export async function computeMetrics(id: string) {
       byUser,
       heatmap,
       burndown,
+      timeSplit,
+      capacityChain,
       daily,
       estimateOutliers: outliers,
       deviation,
