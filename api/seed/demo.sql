@@ -234,6 +234,50 @@ select * from (
 where not exists (select 1 from retro_actions x
                    where x.sprint_id = r.sprint_id and x.title = r.title);
 
+-- ---------------------------------------------------------------- 1:1
+-- Dos reuniones del sprint en curso: una cerrada con respuestas y otra a medias,
+-- para que se vea cómo queda la pestaña con y sin trabajo hecho.
+do $DEMO$
+declare
+  tpl  uuid;
+  m1   uuid;
+  m2   uuid;
+  wk0  date := date_trunc('week', current_date)::date;
+begin
+  select id into tpl from meeting_templates where kind = '1on1' order by is_default desc limit 1;
+  if tpl is null then return; end if;
+  if exists (select 1 from meetings where sprint_id like 'DEMO-%') then return; end if;
+
+  insert into meetings (sprint_id, kind, user_id, template_id, held_on, status, notes)
+  values ('DEMO-3', '1on1', 'chen', tpl, wk0 - 4, 'held',
+          'Worth following up on the refinement context. Chen is not the only one saying it.')
+  returning id into m1;
+
+  insert into meetings (sprint_id, kind, user_id, template_id, held_on, status)
+  values ('DEMO-3', '1on1', 'dara', tpl, wk0 + 1, 'draft')
+  returning id into m2;
+
+  insert into meeting_answers (meeting_id, section, section_hint, question, is_core, answer, position)
+  select m.id, q.section, q.section_hint, q.question, q.is_core, null, q.position
+    from meeting_template_questions q
+    cross join (select m1 as id union all select m2) m
+   where q.template_id = tpl;
+
+  -- Sólo la cerrada lleva respuestas.
+  update meeting_answers set answer = 'Good. The Accounts work is more interesting than the payments migration.'
+   where meeting_id = m1 and question like 'How are things going%';
+  update meeting_answers set answer = 'Waiting on decisions. I lost two days on the GDPR export because nobody could tell me which bucket to use.'
+   where meeting_id = m1 and question like 'Is there anything that has been making%';
+  update meeting_answers set answer = 'They are long. We go through everything with everyone in the room, even when half of it does not touch me.'
+   where meeting_id = m1 and question like 'How do you feel about our refinement%';
+  update meeting_answers set answer = 'Split them by area. I would rather have two short ones than one long one.'
+   where meeting_id = m1 and question like 'If you could change one thing about our refinements%';
+  update meeting_answers set answer = 'We pad them when the requirements are vague, which is most of the time.'
+   where meeting_id = m1 and question like 'When an estimate turns out%';
+  update meeting_answers set answer = 'Chase decisions faster. That is where the days go, not in the code.'
+   where meeting_id = m1 and question like 'What is one thing you would like me to improve%';
+end $DEMO$;
+
 -- ---------------------------------------------------------------- mis tareas
 insert into sprint_todos (sprint_id, title, notes, done, due_date, position)
 with anchor as (select date_trunc('week', current_date)::date as wk0)

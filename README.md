@@ -113,6 +113,10 @@ Master should pay attention to, ordered by severity.
 **Retro.** SMART actions with an owner and a due date, carried over between sprints so last
 fortnight's promises show up next to this fortnight's.
 
+**One-to-ones.** A question script you answer per person, per sprint, with the core questions up
+front and the rest as follow-ups. Each meeting keeps its own copy of the questions, so you can
+rewrite the script without rewriting history.
+
 ![Retrospective SMART actions](docs/images/retro.png)
 
 ## Workflow
@@ -434,6 +438,41 @@ The rules evaluated cover:
 Below that come the per-person time table and the effort split. The report can be **copied as
 Markdown** or **downloaded** as `.md`, ready to paste into the retro or an email.
 
+## Meetings: one-to-ones
+
+Each sprint has a **Meetings** tab. Today it holds one kind — the one-to-one with each member of
+the team — and the schema leaves room for others without a migration.
+
+![One-to-ones for the sprint, with who has been seen and who has not](docs/images/meetings.png)
+
+The list is the team **of that sprint**: whoever has capacity in it. Someone on zero hours this
+fortnight does not get a row, and the header tells you how many of them you have actually seen.
+
+Open one and you get the question script as a form, one box per question. Two things make it
+usable in the half hour a one-to-one actually lasts:
+
+- **Only the core questions are shown.** The script ships with 34 questions grouped in six
+  sections, of which 11 are marked core (★). The rest are follow-ups, one checkbox away, for when
+  an answer opens a door. Any follow-up you have already answered stays visible.
+- **Each section carries its timing and its intent** — why a question is phrased the way it is, for
+  instance avoiding «are we overestimating?», which leads the answer.
+
+Below the questions there is a **notes** box for what you took away yourself, as opposed to what
+they told you. Save as a draft while you are still writing, or save and mark as held.
+
+If the person had a one-to-one in an earlier sprint, the row links to it, so you can open what they
+told you last time before you start.
+
+### Changing the questions
+
+**Edit script** opens the template. It is the starting point for new meetings, and editing it never
+touches a meeting you have already held: **each meeting takes its own copy of the questions** when
+it is created. So the answers you collected three sprints ago keep the questions exactly as they
+were asked, and you are free to rewrite the script whenever your concerns change.
+
+The script that ships is a working one aimed at refinement participation and estimation, but it is
+only a default — expect to end up with your own.
+
 ## My management to-dos
 
 The **My to-dos** tab. This is your personal list as Scrum Master: prepare the demo, review next
@@ -550,7 +589,8 @@ The dev frontend (port 5173) proxies `/api` to the backend on 5181.
 
 ```
 api/      Fastify 5 + TypeScript + PostgreSQL 17. Run with tsx, so there is no build step.
-  src/routes/      one file per area: crud, imports, tickets, metrics, report, retro, todos
+  src/routes/      one file per area: crud, imports, tickets, metrics, report, retro,
+                   todos, meetings
   src/migrations/  the schema, as numbered .sql files applied in order at startup and
                    recorded in _migrations. Adding a 017_*.sql is enough to evolve the
                    database without losing data.

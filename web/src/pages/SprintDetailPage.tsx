@@ -14,6 +14,7 @@ import { WorklogImport } from '../components/WorklogImport';
 import { TicketImport } from '../components/TicketImport';
 import { RetroActions } from '../components/RetroActions';
 import { SprintTodos } from '../components/SprintTodos';
+import { SprintMeetings } from '../components/SprintMeetings';
 import { SprintReport } from '../components/SprintReport';
 
 /** Minúsculas y sin acentos, para que "sofia" encuentre a "Sofía". */
@@ -28,8 +29,12 @@ export default function SprintDetailPage() {
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
   const raw = params.get('tab');
-  const tab: 'tasks' | 'metrics' | 'retro' | 'todos' =
-    raw === 'metrics' ? 'metrics' : raw === 'retro' ? 'retro' : raw === 'todos' ? 'todos' : 'tasks';
+  const tab: 'tasks' | 'metrics' | 'retro' | 'meetings' | 'todos' =
+    raw === 'metrics' ? 'metrics'
+    : raw === 'retro' ? 'retro'
+    : raw === 'meetings' ? 'meetings'
+    : raw === 'todos' ? 'todos'
+    : 'tasks';
 
   const [modalOpen, setModalOpen] = useState(false);
   const [capacityOpen, setCapacityOpen] = useState(false);
@@ -208,6 +213,7 @@ export default function SprintDetailPage() {
             ['tasks', 'Tasks'],
             ['metrics', 'Metrics'],
             ['retro', 'Retro'],
+            ['meetings', 'Meetings'],
             ['todos', 'My to-dos'],
           ] as const).map(([value, label]) => (
             <button
@@ -508,6 +514,8 @@ export default function SprintDetailPage() {
         />
       ) : tab === 'retro' ? (
         <RetroActions sprintId={id} users={users.data ?? []} />
+      ) : tab === 'meetings' ? (
+        <SprintMeetings sprintId={id} capacities={capacities.data ?? []} />
       ) : (
         <SprintTodos sprintId={id} />
       )}

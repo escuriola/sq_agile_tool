@@ -1,4 +1,4 @@
-import type { Capacity, Metrics, Project, RetroAction, Sprint, SprintTodo, Task, User, UserDetailData, VelocityRow } from './types';
+import type { Capacity, Meeting, MeetingTemplate, Metrics, PreviousMeeting, Project, RetroAction, Sprint, SprintTodo, Task, User, UserDetailData, VelocityRow } from './types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // El content-type sólo se manda si hay cuerpo. Un DELETE sin cuerpo pero con
@@ -106,6 +106,33 @@ export const api = {
     create: (id: string, b: Partial<SprintTodo>) => post<SprintTodo>(`/api/sprints/${id}/todos`, b),
     update: (todoId: string, b: Partial<SprintTodo>) => put<SprintTodo>(`/api/todos/${todoId}`, b),
     remove: (todoId: string) => del(`/api/todos/${todoId}`),
+  },
+  meetings: {
+    forSprint: (id: string) =>
+      get<{ own: Meeting[]; previous: PreviousMeeting[] }>(`/api/sprints/${id}/meetings`),
+    get: (meetingId: string) => get<Meeting>(`/api/meetings/${meetingId}`),
+    create: (id: string, b: { kind?: string; user_id?: string | null; held_on?: string | null }) =>
+      post<Meeting>(`/api/sprints/${id}/meetings`, b),
+    save: (
+      meetingId: string,
+      b: {
+        held_on?: string | null;
+        status?: 'draft' | 'held';
+        notes?: string | null;
+        answers?: { id: string; answer: string | null }[];
+        extra?: { section: string; question: string; answer?: string | null }[];
+      }
+    ) => put<Meeting>(`/api/meetings/${meetingId}`, b),
+    remove: (meetingId: string) => del(`/api/meetings/${meetingId}`),
+    templates: () => get<MeetingTemplate[]>('/api/meeting-templates'),
+    saveTemplate: (
+      templateId: string,
+      b: {
+        name?: string;
+        description?: string | null;
+        questions: { section: string; section_hint?: string | null; question: string; is_core?: boolean }[];
+      }
+    ) => put<{ ok: boolean }>(`/api/meeting-templates/${templateId}`, b),
   },
   retro: {
     forSprint: (id: string) =>

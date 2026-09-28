@@ -381,3 +381,52 @@ export type SprintTodo = {
   position: number;
   done_at: string | null;
 };
+
+/* ------------------------------------------------------------- reuniones */
+
+export type MeetingQuestion = {
+  id: string;
+  section: string;
+  section_hint: string | null;
+  question: string;
+  is_core: boolean;
+  position: number;
+};
+
+export type MeetingTemplate = {
+  id: string;
+  kind: string;
+  name: string;
+  description: string | null;
+  is_default: boolean;
+  questions: MeetingQuestion[];
+};
+
+/** Una pregunta dentro de una reunión: copia de la plantilla, más la respuesta. */
+export type MeetingAnswer = MeetingQuestion & { answer: string | null };
+
+export type Meeting = {
+  id: string;
+  sprint_id: string;
+  kind: string;
+  user_id: string | null;
+  user_name: string | null;
+  template_id: string | null;
+  held_on: string | null;
+  status: 'draft' | 'held';
+  notes: string | null;
+  /** Sólo en el listado del sprint. */
+  questions?: number;
+  answered?: number;
+  answers?: MeetingAnswer[];
+};
+
+/** La última reunión de esa persona en un sprint anterior. */
+export type PreviousMeeting = {
+  id: string;
+  kind: string;
+  user_id: string;
+  sprint_id: string;
+  sprint_name: string;
+  held_on: string | null;
+};

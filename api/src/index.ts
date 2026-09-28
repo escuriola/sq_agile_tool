@@ -10,6 +10,7 @@ import ticketRoutes from './routes/tickets.js';
 import statusMapRoutes from './routes/statusMap.js';
 import todoRoutes from './routes/todos.js';
 import reportRoutes from './routes/report.js';
+import meetingRoutes from './routes/meetings.js';
 
 const app = Fastify({
   logger: { level: process.env.LOG_LEVEL ?? 'info' },
@@ -62,6 +63,7 @@ await app.register(ticketRoutes);
 await app.register(statusMapRoutes);
 await app.register(todoRoutes);
 await app.register(reportRoutes);
+await app.register(meetingRoutes);
 
 await waitForDb();
 await migrate();
