@@ -445,8 +445,10 @@ the team — and the schema leaves room for others without a migration.
 
 ![One-to-ones for the sprint, with who has been seen and who has not](docs/images/meetings.png)
 
-The list is the team **of that sprint**: whoever has capacity in it. Someone on zero hours this
-fortnight does not get a row, and the header tells you how many of them you have actually seen.
+The list is **everyone active**, not only the people carrying sprint capacity. A one-to-one is with
+a person, not with an allocation of hours: whoever does UAT, analysis or product deliberately
+consumes no development capacity, and you still need to talk to them. The header tells you how many
+of them you have actually seen this sprint.
 
 Open one and you get the question script as a form, one box per question. Two things make it
 usable in the half hour a one-to-one actually lasts:

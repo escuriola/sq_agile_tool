@@ -322,17 +322,23 @@ export function SprintMeetings({
 
   const remove = useMutation({ mutationFn: api.meetings.remove, onSuccess: refresh });
 
-  /**
-   * El equipo del sprint es quien tiene capacidad en él. Alguien con 0 horas
-   * no participa este sprint, así que no tiene sentido listarle un 1:1.
-   */
-  const equipo = useMemo(
-    () => capacities.filter((c) => Number(c.effective_hours) > 0 || c.is_override),
-    [capacities]
-  );
-
   const porPersona = new Map<string, Meeting>();
   for (const m of meetings.data?.own ?? []) if (m.user_id) porPersona.set(m.user_id, m);
+
+  /**
+   * Aquí va todo el mundo, no sólo quien tiene horas en el sprint: un 1:1 es con
+   * una persona, no con una asignación de capacidad. Quien hace UAT o análisis no
+   * consume capacidad de desarrollo a propósito, y aun así tienes que hablar con
+   * ella. Quien ya no esté activo sólo aparece si tiene una reunión, para no
+   * dejarla inalcanzable.
+   */
+  const equipo = useMemo(
+    () =>
+      capacities
+        .filter((c) => c.active || porPersona.has(c.user_id))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [capacities, meetings.data]
+  );
 
   const anterior = new Map((meetings.data?.previous ?? []).map((p) => [p.user_id, p]));
 
@@ -359,7 +365,7 @@ export function SprintMeetings({
         <ErrorBanner error={create.error ?? remove.error} />
 
         {equipo.length === 0 ? (
-          <Empty>Set the team capacity for this sprint to see who is on it.</Empty>
+          <Empty>No active people yet. Add them on the Users page.</Empty>
         ) : (
           <ul className="flex flex-col gap-1.5">
             {equipo.map((c) => {
