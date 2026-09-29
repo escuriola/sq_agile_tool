@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import type { Capacity, Meeting, MeetingAnswer, MeetingTemplate } from '../lib/types';
+import type { Capacity, Meeting, MeetingAnswer, MeetingDigest, MeetingTemplate } from '../lib/types';
 import { Badge, Button, Card, Empty, ErrorBanner, Field, Modal, cx } from './ui';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -287,6 +287,210 @@ function TemplateEditor({ template, onClose }: { template: MeetingTemplate; onCl
   );
 }
 
+/* ------------------------------------------------- recopilación del sprint */
+
+/** El digest en markdown, para pegarlo donde haga falta. */
+function digestToMarkdown(d: MeetingDigest): string {
+  const out: string[] = [`# One-to-ones · ${d.sprint.name}`, ''];
+  out.push(
+    `${d.coverage.held} of ${d.coverage.meetings} held · ${d.coverage.withAnswers} with written answers`,
+    ''
+  );
+  for (const sec of d.sections) {
+    out.push(`## ${sec.section}`, '');
+    for (const qu of sec.questions) {
+      out.push(`### ${qu.question}  _(${qu.answers.length})_`, '');
+      for (const a of qu.answers) out.push(`- **${a.name}**: ${a.answer}`);
+      out.push('');
+    }
+  }
+  if (d.notes.length) {
+    out.push('## My own notes', '');
+    for (const n of d.notes) out.push(`- **${n.user_name}**: ${n.notes}`);
+    out.push('');
+  }
+  if (d.sprint.meeting_notes?.trim()) {
+    out.push('## Conclusions', '', d.sprint.meeting_notes.trim(), '');
+  }
+  return out.join('\n');
+}
+
+function Digest({ sprintId, onClose }: { sprintId: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ['meetingDigest', sprintId],
+    queryFn: () => api.meetings.digest(sprintId),
+  });
+
+  const [conclusions, setConclusions] = useState('');
+  const [cargado, setCargado] = useState(false);
+  const [soloVarios, setSoloVarios] = useState(false);
+  const [copiado, setCopiado] = useState<'ok' | 'error' | null>(null);
+
+  useEffect(() => {
+    if (!data || cargado) return;
+    setConclusions(data.sprint.meeting_notes ?? '');
+    setCargado(true);
+  }, [data, cargado]);
+
+  const save = useMutation({
+    mutationFn: () => api.sprints.update(sprintId, { meeting_notes: conclusions.trim() || null } as any),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['meetingDigest', sprintId] }),
+  });
+
+  const copiar = async () => {
+    if (!data) return;
+    const texto = digestToMarkdown(data);
+    try {
+      // navigator.clipboard puede no existir y además puede rechazar si el
+      // documento no tiene foco; las dos cosas caen al método clásico.
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(texto);
+      else throw new Error('sin clipboard');
+      setCopiado('ok');
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = texto;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCopiado(ok ? 'ok' : 'error');
+    }
+    setTimeout(() => setCopiado(null), 2000);
+  };
+
+  return (
+    <Modal open onClose={onClose} wide title="What everyone said">
+      {isLoading || !data ? (
+        <p className="text-sm text-slate-500">Loading…</p>
+      ) : data.sections.length === 0 ? (
+        <Empty>No written answers in this sprint yet.</Empty>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
+            <span>
+              <strong className="text-slate-300">{data.coverage.held}</strong> of{' '}
+              {data.coverage.meetings} held ·{' '}
+              <strong className="text-slate-300">{data.coverage.withAnswers}</strong> with written
+              answers
+            </span>
+            {data.coverage.emptyHeld.length > 0 && (
+              <span className="text-amber-500">
+                nothing written down for {data.coverage.emptyHeld.join(', ')}
+              </span>
+            )}
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={soloVarios}
+                onChange={(e) => setSoloVarios(e.target.checked)}
+              />
+              Only questions more than one person answered
+            </label>
+            <Button size="sm" variant="ghost" className="ml-auto" onClick={copiar}>
+              {copiado === 'ok' ? '✓ copied' : copiado === 'error' ? '✕ error' : '⧉ Copy as markdown'}
+            </Button>
+          </div>
+
+          {data.shared.length > 0 && (
+            <div className="rounded-lg border border-[var(--color-ink-800)] bg-[var(--color-ink-900)]/60 p-3">
+              <h4 className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                Where the most voices are
+              </h4>
+              <ul className="flex flex-col gap-1 text-xs">
+                {data.shared.map((sh) => (
+                  <li key={sh.question} className="flex gap-2">
+                    <span className="w-6 shrink-0 text-right font-medium text-sky-400">
+                      {sh.voices}
+                    </span>
+                    <span className="text-slate-300">{sh.question}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-[11px] text-slate-600">
+                Not a conclusion — just where several people chose to say something, which is
+                usually a team topic rather than a personal one.
+              </p>
+            </div>
+          )}
+
+          {data.sections.map((sec) => {
+            const preguntas = soloVarios
+              ? sec.questions.filter((qu) => qu.answers.length > 1)
+              : sec.questions;
+            if (!preguntas.length) return null;
+            return (
+              <div key={sec.section}>
+                <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                  {sec.section}
+                </h4>
+                <div className="flex flex-col gap-3">
+                  {preguntas.map((qu) => (
+                    <div
+                      key={qu.question}
+                      className="rounded-lg border border-[var(--color-ink-800)] bg-[var(--color-ink-850)]/40 p-3"
+                    >
+                      <div className="mb-2 flex items-start gap-1.5">
+                        {qu.is_core && <span className="text-amber-400">★</span>}
+                        <span className="text-sm text-slate-200">{qu.question}</span>
+                        <span className="ml-auto shrink-0 text-[11px] text-slate-600">
+                          {qu.answers.length}
+                        </span>
+                      </div>
+                      <ul className="flex flex-col gap-1.5 text-xs">
+                        {qu.answers.map((a) => (
+                          <li key={a.user_id} className="flex gap-2">
+                            <span className="w-20 shrink-0 text-slate-500">{a.name}</span>
+                            <span className="whitespace-pre-wrap text-slate-300">{a.answer}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+
+          {data.notes.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                My own notes
+              </h4>
+              <ul className="flex flex-col gap-1.5 text-xs">
+                {data.notes.map((n) => (
+                  <li key={n.user_name} className="flex gap-2">
+                    <span className="w-20 shrink-0 text-slate-500">{n.user_name}</span>
+                    <span className="whitespace-pre-wrap text-slate-300">{n.notes}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <Field
+            label="Conclusions"
+            hint="what you take from reading all of them together — the retro actions come after this"
+          >
+            <textarea rows={4} value={conclusions} onChange={(e) => setConclusions(e.target.value)} />
+          </Field>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={onClose}>
+              Close
+            </Button>
+            <Button variant="primary" disabled={save.isPending} onClick={() => save.mutate()}>
+              Save conclusions
+            </Button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 /* ------------------------------------------------------------- la pestaña */
 
 export function SprintMeetings({
@@ -305,6 +509,7 @@ export function SprintMeetings({
 
   const [openId, setOpenId] = useState<string | null>(null);
   const [editTpl, setEditTpl] = useState(false);
+  const [digest, setDigest] = useState(false);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['meetings', sprintId] });
@@ -343,6 +548,7 @@ export function SprintMeetings({
   const anterior = new Map((meetings.data?.previous ?? []).map((p) => [p.user_id, p]));
 
   const hechas = equipo.filter((c) => porPersona.get(c.user_id)?.status === 'held').length;
+  const conRespuestas = [...porPersona.values()].filter((m) => (m.answered ?? 0) > 0).length;
   const tpl = templates.data?.[0];
 
   return (
@@ -354,6 +560,11 @@ export function SprintMeetings({
             <span className="text-xs text-slate-500">
               {hechas} of {equipo.length} held
             </span>
+            {conRespuestas > 0 && (
+              <Button size="sm" variant="primary" onClick={() => setDigest(true)}>
+                📋 What everyone said
+              </Button>
+            )}
             {tpl && (
               <Button size="sm" variant="ghost" onClick={() => setEditTpl(true)}>
                 Edit script
@@ -444,6 +655,7 @@ export function SprintMeetings({
         <MeetingForm meetingId={openId} onClose={() => setOpenId(null)} onSaved={refresh} />
       )}
       {editTpl && tpl && <TemplateEditor template={tpl} onClose={() => setEditTpl(false)} />}
+      {digest && <Digest sprintId={sprintId} onClose={() => setDigest(false)} />}
     </div>
   );
 }

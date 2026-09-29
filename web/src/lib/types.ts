@@ -467,3 +467,23 @@ export type CapacityChain = {
   developmentLoad: number | null;
   overCommitted: number | null;
 };
+
+/** Todas las respuestas del sprint agrupadas por pregunta, para leerlas juntas. */
+export type MeetingDigest = {
+  sprint: { id: string; name: string; meeting_notes: string | null };
+  kind: string;
+  sections: {
+    section: string;
+    hint: string | null;
+    questions: {
+      question: string;
+      is_core: boolean;
+      position: number;
+      answers: { user_id: string; name: string; answer: string }[];
+    }[];
+  }[];
+  /** Las preguntas que más gente respondió: por dónde empezar a leer. */
+  shared: { section: string; question: string; voices: number }[];
+  notes: { user_name: string; notes: string }[];
+  coverage: { meetings: number; held: number; withAnswers: number; emptyHeld: string[] };
+};

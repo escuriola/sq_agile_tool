@@ -1,4 +1,4 @@
-import type { Capacity, Meeting, MeetingTemplate, Metrics, PreviousMeeting, Project, RetroAction, Sprint, SprintTodo, Task, User, UserDetailData, VelocityRow } from './types';
+import type { Capacity, Meeting, MeetingDigest, MeetingTemplate, Metrics, PreviousMeeting, Project, RetroAction, Sprint, SprintTodo, Task, User, UserDetailData, VelocityRow } from './types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // El content-type sólo se manda si hay cuerpo. Un DELETE sin cuerpo pero con
@@ -111,6 +111,7 @@ export const api = {
     forSprint: (id: string) =>
       get<{ own: Meeting[]; previous: PreviousMeeting[] }>(`/api/sprints/${id}/meetings`),
     get: (meetingId: string) => get<Meeting>(`/api/meetings/${meetingId}`),
+    digest: (id: string) => get<MeetingDigest>(`/api/sprints/${id}/meetings/digest`),
     create: (id: string, b: { kind?: string; user_id?: string | null; held_on?: string | null }) =>
       post<Meeting>(`/api/sprints/${id}/meetings`, b),
     save: (

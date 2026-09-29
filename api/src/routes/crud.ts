@@ -152,6 +152,7 @@ export default async function crudRoutes(app: FastifyInstance) {
         discovery_ratio: z.number().min(0).max(1).optional(),
         commit_factor: z.number().gt(0).max(3).optional(),
         review_ratio: z.number().min(0).max(0.9).optional(),
+        meeting_notes: nullableStr,
       })
       .parse(req.body);
     return one(
@@ -163,12 +164,14 @@ export default async function crudRoutes(app: FastifyInstance) {
          status = coalesce($6, status),
          discovery_ratio = coalesce($7, discovery_ratio),
          commit_factor = coalesce($8, commit_factor),
-         review_ratio = coalesce($9, review_ratio)
+         review_ratio = coalesce($9, review_ratio),
+         meeting_notes = case when $10::boolean then $11 else meeting_notes end
        where id = $1 returning *`,
       [
         id, b.name ?? null, b.start_date ?? null, b.end_date ?? null, b.goal ?? null,
         b.status ?? null, b.discovery_ratio ?? null, b.commit_factor ?? null,
         b.review_ratio ?? null,
+        'meeting_notes' in b, b.meeting_notes ?? null,
       ]
     );
   });

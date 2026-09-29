@@ -107,6 +107,88 @@ export default async function meetingRoutes(app: FastifyInstance) {
     return { own, previous };
   });
 
+  /**
+   * Todas las respuestas del sprint agrupadas POR PREGUNTA, no por persona.
+   * Leídas persona a persona no se ve nada; puestas una debajo de otra, las
+   * coincidencias saltan solas. Es una vista sobre lo que ya está guardado, así
+   * que siempre está al día: no hay que regenerar nada.
+   */
+  app.get('/api/sprints/:id/meetings/digest', async (req) => {
+    const { id } = req.params as { id: string };
+    const { kind = '1on1' } = req.query as { kind?: string };
+
+    const meetings = await q<any>(
+      `select m.id, m.user_id, m.status, m.held_on, m.notes, u.name as user_name
+         from meetings m left join users u on u.id = m.user_id
+        where m.sprint_id = $1 and m.kind = $2
+        order by u.name nulls last`,
+      [id, kind]
+    );
+
+    const rows = await q<any>(
+      `select a.section, a.section_hint, a.question, a.is_core, a.position,
+              a.answer, m.user_id, u.name as user_name
+         from meeting_answers a
+         join meetings m on m.id = a.meeting_id
+         left join users u on u.id = m.user_id
+        where m.sprint_id = $1 and m.kind = $2
+          and coalesce(trim(a.answer), '') <> ''
+        order by a.position, u.name`,
+      [id, kind]
+    );
+
+    // Agrupar conservando el orden del guion.
+    const sections: any[] = [];
+    for (const r of rows) {
+      let sec = sections[sections.length - 1];
+      if (!sec || sec.section !== r.section) {
+        sec = { section: r.section, hint: r.section_hint, questions: [] };
+        sections.push(sec);
+      }
+      let qu = sec.questions[sec.questions.length - 1];
+      if (!qu || qu.question !== r.question) {
+        qu = { question: r.question, is_core: r.is_core, position: r.position, answers: [] };
+        sec.questions.push(qu);
+      }
+      qu.answers.push({ user_id: r.user_id, name: r.user_name ?? r.user_id, answer: r.answer });
+    }
+
+    // Quien ha contestado más gente, más probable es que sea un tema del equipo
+    // y no de una persona. No es una conclusión, es por dónde empezar a leer.
+    const shared = sections
+      .flatMap((s) => s.questions.map((qu: any) => ({ section: s.section, ...qu })))
+      .filter((qu: any) => qu.answers.length >= 3)
+      .sort((a: any, b: any) => b.answers.length - a.answers.length)
+      .slice(0, 6)
+      .map((qu: any) => ({ section: qu.section, question: qu.question, voices: qu.answers.length }));
+
+    const sprint = await one<any>(
+      `select id, name, meeting_notes from sprints where id = $1`,
+      [id]
+    );
+
+    const withAnswers = new Set(rows.map((r) => r.user_id));
+    return {
+      sprint,
+      kind,
+      sections,
+      shared,
+      notes: meetings.filter((m) => (m.notes ?? '').trim()).map((m) => ({
+        user_name: m.user_name,
+        notes: m.notes,
+      })),
+      coverage: {
+        meetings: meetings.length,
+        held: meetings.filter((m) => m.status === 'held').length,
+        withAnswers: withAnswers.size,
+        // Reuniones marcadas como hechas pero sin una sola respuesta escrita.
+        emptyHeld: meetings
+          .filter((m) => m.status === 'held' && !withAnswers.has(m.user_id))
+          .map((m) => m.user_name),
+      },
+    };
+  });
+
   app.get('/api/meetings/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     const m = await one<any>(

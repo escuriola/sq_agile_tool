@@ -509,6 +509,27 @@ they told you. Save as a draft while you are still writing, or save and mark as 
 If the person had a one-to-one in an earlier sprint, the row links to it, so you can open what they
 told you last time before you start.
 
+### Reading them all together
+
+**What everyone said** opens the sprint's one-to-ones grouped **by question rather than by person**.
+Read person by person you see eight conversations; read question by question, the eight answers to
+«how do you feel about our refinement sessions?» sit one under another and the pattern shows
+itself.
+
+It is a view over what is already stored, so it is always current — there is nothing to regenerate
+and nothing to keep in sync.
+
+- **Where the most voices are** lists the questions the most people chose to answer. That is not a
+  conclusion, just where to start reading: a question several people answered is usually a team
+  topic rather than a personal one.
+- A filter hides the questions only one person answered.
+- The header says how many meetings were held and how many have anything written down, and names
+  anyone marked as held with nothing recorded.
+- **⧉ Copy as markdown** puts the whole thing on the clipboard, ready to paste into a retro board
+  or a document.
+- **Conclusions** is a box saved on the sprint: what you take from reading them together. The SMART
+  actions in the Retro tab come after this, not instead of it.
+
 ### Changing the questions
 
 **Edit script** opens the template. It is the starting point for new meetings, and editing it never
