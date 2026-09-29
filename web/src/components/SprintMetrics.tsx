@@ -15,7 +15,7 @@ import {
   YAxis,
 } from 'recharts';
 import { api } from '../lib/api';
-import { statusMeta, trackMeta, typeMeta, type Project } from '../lib/types';
+import { statusMeta, trackMeta, typeMeta, type Project, type TimeSplit } from '../lib/types';
 import { Badge, Button, Card, Empty, Stat, cx } from './ui';
 import { useEffect, useState } from 'react';
 import { UserDetail } from './UserDetail';
@@ -442,6 +442,124 @@ export function SprintMetrics({
               </table>
             </div>
           )}
+        </Card>
+      )}
+
+      {/* ------------------------------------- desarrollo, revisión y overhead */}
+      {data.timeSplit && data.timeSplit.development + data.timeSplit.review > 0 && (
+        <Card
+          title="Where the time went"
+          actions={
+            data.timeSplit.reviewOverDev != null && (
+              <span className="text-xs text-slate-500">
+                review is{' '}
+                <span className="text-purple-300">{data.timeSplit.reviewOverDev}%</span> on top of
+                development
+              </span>
+            )
+          }
+        >
+          {(() => {
+            const ts = data.timeSplit;
+            const total = ts.development + ts.review + ts.overhead + ts.unattributed;
+            const bloques = [
+              { k: 'Development', v: ts.development, c: '#38bdf8' },
+              { k: 'Review', v: ts.review, c: '#a78bfa' },
+              { k: 'Deployments', v: ts.overhead, c: '#fbbf24' },
+              { k: 'No owner', v: ts.unattributed, c: '#475569' },
+            ].filter((b) => b.v > 0);
+            const maxPersona = Math.max(
+              ...ts.byUser.map((u: TimeSplit["byUser"][number]) => u.development + u.review),
+              1
+            );
+            return (
+              <div className="flex flex-col gap-3">
+                <div className="flex h-4 w-full overflow-hidden rounded-full bg-[var(--color-ink-800)]">
+                  {bloques.map((b) => (
+                    <div
+                      key={b.k}
+                      title={`${b.k}: ${b.v} h`}
+                      style={{
+                        width: `${total ? (b.v / total) * 100 : 0}%`,
+                        backgroundColor: b.c,
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
+                  {bloques.map((b) => (
+                    <span key={b.k} className="flex items-center gap-1.5">
+                      <span className="size-2 rounded-full" style={{ backgroundColor: b.c }} />
+                      <span className="text-slate-400">{b.k}</span>
+                      <span className="text-slate-200">{b.v} h</span>
+                      <span className="text-slate-600">
+                        {total ? Math.round((b.v / total) * 100) : 0}%
+                      </span>
+                    </span>
+                  ))}
+                </div>
+
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-slate-500">
+                      <th className="pb-1">Person</th>
+                      <th className="pb-1 text-right">Development</th>
+                      <th className="pb-1 text-right">Review</th>
+                      <th className="pb-1 w-1/3 pl-3">Split</th>
+                      <th className="pb-1 text-right">Reviewing</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--color-ink-800)]">
+                    {ts.byUser.map((u: TimeSplit["byUser"][number]) => (
+                      <tr key={u.user_id}>
+                        <td className="py-1.5 text-slate-200">{u.name}</td>
+                        <td className="py-1.5 text-right text-slate-300">{u.development || '—'}</td>
+                        <td className="py-1.5 text-right text-purple-300">{u.review || '—'}</td>
+                        <td className="py-1.5 px-3">
+                          <div className="flex h-2 w-full overflow-hidden rounded-full bg-[var(--color-ink-800)]">
+                            <div
+                              className="h-full bg-sky-500"
+                              style={{ width: `${(u.development / maxPersona) * 100}%` }}
+                            />
+                            <div
+                              className="h-full bg-purple-500"
+                              style={{ width: `${(u.review / maxPersona) * 100}%` }}
+                            />
+                          </div>
+                        </td>
+                        <td
+                          className={cx(
+                            'py-1.5 text-right',
+                            u.reviewPct == null
+                              ? 'text-slate-600'
+                              : u.reviewPct > 45
+                                ? 'text-rose-400'
+                                : u.reviewPct < 10
+                                  ? 'text-amber-500'
+                                  : 'text-slate-400'
+                          )}
+                        >
+                          {u.reviewPct == null ? '—' : `${u.reviewPct}%`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <p className="text-xs text-slate-600">
+                  An hour is development or review according to what the worklog note says, and when
+                  it says nothing, according to whether the owner logged it. That fallback is
+                  measured, not assumed: of the hours that do carry a label, 98.6% of development
+                  was logged by the owner and 82.6% of review by somebody else.{' '}
+                  {data.timeSplit.explicitPct != null && (
+                    <>Here {data.timeSplit.explicitPct}% of the hours carry one.</>
+                  )}{' '}
+                  Red in the last column is someone carrying the team's reviewing; amber is someone
+                  who reviews almost nothing.
+                </p>
+              </div>
+            );
+          })()}
         </Card>
       )}
 

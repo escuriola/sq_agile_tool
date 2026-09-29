@@ -141,8 +141,23 @@ export function PlanningBar({
   const deliveryCapacity = capacity * (1 - ratio);
   const discoveryCapacity = capacity * ratio;
 
-  const deliveryTasks = tasks.filter((t) => t.track !== 'discovery');
-  const discoveryTasks = tasks.filter((t) => t.track === 'discovery');
+  /**
+   * El overhead (deployments) se saca de los carriles. Consume capacidad, pero
+   * no es trabajo que se comprometa ni contra el que se mida el avance: la tarea
+   * de deploys no se cierra hasta el último día por diseño.
+   */
+  const overheadTasks = tasks.filter((t) => t.overhead);
+  const normalTasks = tasks.filter((t) => !t.overhead);
+  const deliveryTasks = normalTasks.filter((t) => t.track !== 'discovery');
+  const discoveryTasks = normalTasks.filter((t) => t.track === 'discovery');
+
+  // Mismo cálculo que hace la API, repetido aquí para que el panel reaccione en
+  // el momento en que marcas una tarea o cambias una estimación.
+  const reviewRatio = Number(sprint?.review_ratio ?? 0.30);
+  const overheadReserve = overheadTasks.reduce((a, t) => a + (t.estimate_hours ?? 0), 0);
+  const availableForDev = Math.max(deliveryCapacity - overheadReserve, 0);
+  const developmentCapacity = availableForDev / (1 + reviewRatio);
+  const reviewReserve = availableForDev - developmentCapacity;
 
   const deliveryRows = useMemo(() => groupByProject(deliveryTasks, projects), [tasks, projects]);
   const discoveryRows = useMemo(() => groupByProject(discoveryTasks, projects), [tasks, projects]);
@@ -155,6 +170,11 @@ export function PlanningBar({
 
   // Lo que el delivery se pasa de su parte se lo quita al discovery.
   const overflow = Math.max(deliveryHours - deliveryCapacity, 0);
+
+  const developmentCommitted = deliveryHours * (1 - reviewRatio);
+  const reviewCommitted = deliveryHours * reviewRatio;
+  const devLoad = developmentCapacity > 0 ? (developmentCommitted / developmentCapacity) * 100 : null;
+  const devOver = Math.max(developmentCommitted - developmentCapacity, 0);
 
   return (
     <Card
@@ -195,6 +215,73 @@ export function PlanningBar({
             {unestimated > 0 && (
               <span className="text-xs text-amber-500">{unestimated} task(s) without an estimate in hours</span>
             )}
+          </div>
+
+          {/* De la capacidad de delivery a lo que de verdad puedes comprometer. */}
+          <div className="rounded-lg border border-[var(--color-ink-800)] bg-[var(--color-ink-900)]/60 p-3">
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+              <h4 className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                What you can commit to development
+              </h4>
+              {devLoad != null && (
+                <span
+                  className={cx(
+                    'text-lg font-semibold',
+                    devOver > 0 ? 'text-rose-400' : devLoad > 85 ? 'text-amber-400' : 'text-emerald-400'
+                  )}
+                >
+                  {devLoad.toFixed(0)}%
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+              <span className="text-slate-300">{deliveryCapacity.toFixed(0)} h</span>
+              <span className="text-[11px] text-slate-600">delivery</span>
+              <span className="text-slate-700">−</span>
+              <span className="text-amber-400">{overheadReserve.toFixed(0)} h</span>
+              <span className="text-[11px] text-slate-600">
+                overhead{overheadTasks.length > 0 && ` (${overheadTasks.length})`}
+              </span>
+              <span className="text-slate-700">−</span>
+              <span className="text-purple-300">{reviewReserve.toFixed(0)} h</span>
+              <span className="text-[11px] text-slate-600">
+                review, {(reviewRatio * 100).toFixed(0)}%
+              </span>
+              <span className="text-slate-700">=</span>
+              <span className="font-semibold text-emerald-400">{developmentCapacity.toFixed(0)} h</span>
+              <span className="text-[11px] text-slate-600">for development</span>
+            </div>
+
+            {/* barra: desarrollo comprometido, revisión que arrastra, y el resto */}
+            <div className="mt-2 flex h-3 w-full overflow-hidden rounded-full bg-[var(--color-ink-800)]">
+              <div
+                className="h-full bg-sky-500"
+                title={`Development committed: ${developmentCommitted.toFixed(1)} h`}
+                style={{ width: `${Math.min((developmentCommitted / Math.max(availableForDev, 1)) * 100, 100)}%` }}
+              />
+              <div
+                className="h-full bg-purple-500/70"
+                title={`Review those tasks will pull in: ${reviewCommitted.toFixed(1)} h`}
+                style={{ width: `${Math.min((reviewCommitted / Math.max(availableForDev, 1)) * 100, 100)}%` }}
+              />
+            </div>
+
+            <p className="mt-2 text-xs text-slate-500">
+              The {deliveryHours.toFixed(0)} h in the sprint are{' '}
+              <span className="text-sky-400">{developmentCommitted.toFixed(0)} h of development</span> by the
+              owners plus <span className="text-purple-300">{reviewCommitted.toFixed(0)} h of review</span>{' '}
+              done by someone else.{' '}
+              {devOver > 0 ? (
+                <span className="text-rose-400">
+                  That is {devOver.toFixed(0)} h of development more than fits.
+                </span>
+              ) : (
+                <span className="text-emerald-400">
+                  Room for {(developmentCapacity - developmentCommitted).toFixed(0)} h more of development.
+                </span>
+              )}
+            </p>
           </div>
 
           {/* El delivery es el foco: ocupa todo el ancho y lleva el desglose por proyecto. */}

@@ -30,6 +30,7 @@ export function CapacityEditor({
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [bulk, setBulk] = useState('');
   const [discoveryPct, setDiscoveryPct] = useState('20');
+  const [reviewPct, setReviewPct] = useState('30');
 
   const sprint = sprints.find((s) => s.id === sprintId);
 
@@ -46,7 +47,8 @@ export function CapacityEditor({
     if (!open || !sprint) return;
     // sin redondear a entero: hay repartos con decimales (un tercio = 33.3333 %)
     setDiscoveryPct(String(+(Number(sprint.discovery_ratio ?? 0.20) * 100).toFixed(4)));
-  }, [open, sprint?.discovery_ratio]);
+    setReviewPct(String(+(Number(sprint.review_ratio ?? 0.30) * 100).toFixed(4)));
+  }, [open, sprint?.discovery_ratio, sprint?.review_ratio]);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['capacities', sprintId] });
@@ -59,6 +61,7 @@ export function CapacityEditor({
     mutationFn: async () => {
       await api.sprints.update(sprintId, {
         discovery_ratio: Math.min(Math.max(Number(discoveryPct) || 0, 0), 100) / 100,
+        review_ratio: Math.min(Math.max(Number(reviewPct) || 0, 0), 100) / 100,
       });
       return api.sprints.saveCapacities(
         sprintId,
@@ -236,6 +239,23 @@ export function CapacityEditor({
                   step="0.0001"
                   value={discoveryPct}
                   onChange={(e) => setDiscoveryPct(e.target.value)}
+                  className="w-24"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span
+                  className="text-[11px] uppercase tracking-wide text-slate-500"
+                  title="Share of a task's estimate that the review takes, done by someone other than the owner"
+                >
+                  % of an estimate that is review
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  max="90"
+                  step="0.5"
+                  value={reviewPct}
+                  onChange={(e) => setReviewPct(e.target.value)}
                   className="w-24"
                 />
               </label>

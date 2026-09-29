@@ -52,6 +52,7 @@ export function TaskForm({
   const [comment, setComment] = useState(task?.comment ?? '');
   const [addedAfter, setAddedAfter] = useState(task?.added_after_start ?? false);
   const [blocked, setBlocked] = useState(task?.blocked ?? false);
+  const [overhead, setOverhead] = useState(task?.overhead ?? false);
   const [completedAt, setCompletedAt] = useState(task?.completed_at ?? '');
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -106,6 +107,7 @@ export function TaskForm({
       comment: comment.trim() || null,
       added_after_start: addedAfter,
       blocked,
+      overhead,
       // La fecha de cierre alimenta el burndown: si registras a posteriori, ponla a mano.
       completed_at: status === 'done' ? completedAt || today() : null,
       dedications: cleanDeds.map((d) => ({
@@ -256,6 +258,19 @@ export function TaskForm({
           />
           Blocked
           <span className="text-xs text-slate-600">— keeps its place in the flow</span>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-slate-400">
+          <input
+            type="checkbox"
+            className="size-4 accent-amber-500"
+            checked={overhead}
+            onChange={(e) => setOverhead(e.target.checked)}
+          />
+          Sprint overhead
+          <span className="text-xs text-slate-600">
+            — deployments and releases: reserves capacity, is not committed development, stays out
+            of the burndown
+          </span>
         </label>
       </div>
 

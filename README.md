@@ -438,6 +438,50 @@ The rules evaluated cover:
 Below that come the per-person time table and the effort split. The report can be **copied as
 Markdown** or **downloaded** as `.md`, ready to paste into the retro or an email.
 
+## Development, review and overhead
+
+A task's estimate covers the development **and** the review, but the review is done by someone
+other than the owner. Charging the owner the whole estimate inflates their load and leaves the
+reviewer's work invisible. Measured over one closed sprint: of every estimated hour, 0.53 h was
+development.
+
+![Where the sprint's hours went, split by person](docs/images/time-split.png)
+
+### How an hour is classified
+
+Two rules, in this order:
+
+1. **What the worklog note says**, when it says anything — `Development:`, `Review:`, `ACC Deploy`.
+2. **Who logged it**, when the note says nothing: the owner means development, anyone else means
+   review.
+
+The second rule is measured, not assumed. Checked against the hours that *do* carry a label,
+98.6 % of development was logged by the owner and 82.6 % of review by somebody else. The card tells
+you what share of the hours carried a label, so you know how much of the split rests on the
+fallback.
+
+The **Reviewing** column is where the useful surprise usually is: red marks someone carrying the
+team's reviewing, amber someone who reviews almost nothing.
+
+### Planning with it
+
+Two settings live next to the discovery split, under **Capacity & split**:
+
+- **% of an estimate that is review** (default 30 %). Calibrate it from the previous sprint's
+  measured figure.
+- Any task can be marked **sprint overhead** — the per-project deployment task, which eats capacity
+  but is not committable development and, by design, does not close until the last day.
+
+The planning bar then reads as a chain:
+
+```
+542 h delivery − 32 h overhead − 118 h review (30 %) = 392 h for development
+```
+
+and **Workload per person** charges each owner only their development share, with the review left
+as a team pool rather than anyone's personal load. Overhead tasks are out of the burndown too: a
+task that closes on the last day otherwise flattens the curve and then drops it in one step.
+
 ## Meetings: one-to-ones
 
 Each sprint has a **Meetings** tab. Today it holds one kind — the one-to-one with each member of

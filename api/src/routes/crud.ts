@@ -151,6 +151,7 @@ export default async function crudRoutes(app: FastifyInstance) {
         status: z.enum(['planned', 'active', 'closed']).optional(),
         discovery_ratio: z.number().min(0).max(1).optional(),
         commit_factor: z.number().gt(0).max(3).optional(),
+        review_ratio: z.number().min(0).max(0.9).optional(),
       })
       .parse(req.body);
     return one(
@@ -161,11 +162,13 @@ export default async function crudRoutes(app: FastifyInstance) {
          goal = coalesce($5, goal),
          status = coalesce($6, status),
          discovery_ratio = coalesce($7, discovery_ratio),
-         commit_factor = coalesce($8, commit_factor)
+         commit_factor = coalesce($8, commit_factor),
+         review_ratio = coalesce($9, review_ratio)
        where id = $1 returning *`,
       [
         id, b.name ?? null, b.start_date ?? null, b.end_date ?? null, b.goal ?? null,
         b.status ?? null, b.discovery_ratio ?? null, b.commit_factor ?? null,
+        b.review_ratio ?? null,
       ]
     );
   });
@@ -318,6 +321,7 @@ export default async function crudRoutes(app: FastifyInstance) {
         comment: nullableStr,
         added_after_start: z.boolean().optional(),
         blocked: z.boolean().optional(),
+        overhead: z.boolean().optional(),
         completed_at: nullableStr,
         dedications: z.array(dedicationInput).optional(),
       })
@@ -326,9 +330,9 @@ export default async function crudRoutes(app: FastifyInstance) {
     const task = await one<{ uid: string }>(
       `insert into tasks (key, sprint_id, project_id, title, type, track, status,
                           estimate_points, estimate_hours, assignee_id, comment,
-                          added_after_start, blocked, completed_at)
+                          added_after_start, blocked, completed_at, overhead)
        values ($1,$2,$3,$4,coalesce($5,'story'),coalesce($6,'delivery'),coalesce($7,'todo'),
-               $8,$9,$10,$11,coalesce($12,false),coalesce($13,false),$14)
+               $8,$9,$10,$11,coalesce($12,false),coalesce($13,false),$14,coalesce($15,false))
        returning uid`,
       [
         b.key, b.sprint_id, b.project_id, b.title ?? null, b.type ?? null, b.track ?? null,
@@ -336,6 +340,7 @@ export default async function crudRoutes(app: FastifyInstance) {
         b.estimate_points ?? null, b.estimate_hours ?? null, b.assignee_id || null,
         b.comment ?? null, b.added_after_start ?? null, b.blocked ?? null,
         b.completed_at ?? (b.status === 'done' ? new Date().toISOString().slice(0, 10) : null),
+        b.overhead ?? null,
       ]
     );
 
@@ -367,6 +372,7 @@ export default async function crudRoutes(app: FastifyInstance) {
         comment: nullableStr,
         added_after_start: z.boolean().optional(),
         blocked: z.boolean().optional(),
+        overhead: z.boolean().optional(),
         completed_at: nullableStr,
         dedications: z.array(dedicationInput).optional(),
       })
@@ -392,6 +398,7 @@ export default async function crudRoutes(app: FastifyInstance) {
          added_after_start = coalesce($16, added_after_start),
          track = coalesce($19, track),
          blocked = coalesce($20, blocked),
+         overhead = coalesce($21, overhead),
          completed_at = case
            when $17::boolean then $18::date
            when $7 = 'done' and completed_at is null then current_date
@@ -411,6 +418,7 @@ export default async function crudRoutes(app: FastifyInstance) {
         explicitCompleted, b.completed_at ?? null,
         b.track ?? null,
         b.blocked ?? null,
+        b.overhead ?? null,
       ]
     );
 

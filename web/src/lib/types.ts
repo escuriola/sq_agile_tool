@@ -35,6 +35,8 @@ export type Sprint = {
   discovery_ratio: number;
   /** Confidence factor for sizing next sprint's commitment from this one. */
   commit_factor: number;
+  /** Share of a task's estimate that the review takes, done by someone other than the owner (0–1). */
+  review_ratio: number;
   task_count?: number;
 };
 
@@ -75,6 +77,8 @@ export type Task = {
   remaining_hours: number | null;
   /** Independent of status: a blocked task still sits at its point in the flow. */
   blocked: boolean;
+  /** Fixed sprint reserve (deployments): eats capacity, is not committable development. */
+  overhead: boolean;
   completed_at: string | null;
   logged_hours: number;
   dedications: Dedication[];
@@ -247,6 +251,8 @@ export type Metrics = {
     cumulativeHours: number | null;
     remainingHours: number | null;
   }[];
+  timeSplit: TimeSplit;
+  capacityChain: CapacityChain;
   daily: { date: string; hours: number }[];
   readyToClose: { key: string; title: string | null; project_id: string; status: TaskStatus; estimate_hours: number; logged_hours: number }[];
   atRisk: { key: string; title: string | null; project_id: string; estimate_hours: number; logged_hours: number; remaining_hours: number | null; consumed: number }[];
@@ -429,4 +435,35 @@ export type PreviousMeeting = {
   sprint_id: string;
   sprint_name: string;
   held_on: string | null;
+};
+
+export type TimeSplit = {
+  development: number;
+  review: number;
+  overhead: number;
+  unattributed: number;
+  /** Review as a percentage of development: the figure the reserve is calibrated on. */
+  reviewOverDev: number | null;
+  /** How much of the split rests on a worklog note rather than on the owner fallback. */
+  explicitPct: number | null;
+  byUser: {
+    user_id: string; name: string;
+    development: number; review: number; overhead: number;
+    reviewPct: number | null;
+  }[];
+};
+
+export type CapacityChain = {
+  reviewRatio: number;
+  teamCapacity: number | null;
+  deliveryCapacity: number | null;
+  overheadReserve: number;
+  overheadTasks: number;
+  reviewReserve: number | null;
+  developmentCapacity: number | null;
+  committedEstimate: number;
+  developmentCommitted: number;
+  reviewCommitted: number;
+  developmentLoad: number | null;
+  overCommitted: number | null;
 };
